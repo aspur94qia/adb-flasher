@@ -14,6 +14,7 @@ class Extra {
         u.pair(t, u.btn("Peta partisi (root)", 2, v -> partMap(m)), u.btn("Status bootloader", 2, v -> blStatus(m)));
         u.pair(t, u.btn("Wipe userdata", 1, v -> wipe(m, "userdata")), u.btn("Wipe cache", 1, v -> wipe(m, "cache")));
         u.pair(t, u.btn("Shell lokal (HP ini)", 0, v -> m.sh(m.cmd.getText().toString(), false)), null);
+        Extra2.build(m, t);
     }
 
     static void adb(MainActivity m, String c) {

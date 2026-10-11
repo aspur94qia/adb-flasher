@@ -200,6 +200,7 @@ public class MainActivity extends Activity {
     }
 
     void log(String s) {
+        Extra2.progress(this, s);
         ui.post(() -> {
             int col = 0xFF3FB950;
             if (s.startsWith("$") || s.startsWith(">")) col = 0xFF79C0FF;
@@ -216,8 +217,9 @@ public class MainActivity extends Activity {
 
     void bg(IOR r) {
         ex.execute(() -> {
+            Extra2.lock(this, true);
             try { r.run(); }
-            catch (Exception e) { log("Error: " + e.getMessage()); setStatus("error"); }
+            & finally { Extra2.lock(this, false); }
         });
     }
 
