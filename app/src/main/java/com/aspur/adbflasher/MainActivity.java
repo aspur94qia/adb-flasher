@@ -140,6 +140,7 @@ public class MainActivity extends Activity {
         showTab(1);
         Extra4.install(this);
         Extra5.install(this);
+        Extra6.install(this);
         log("ADB Flasher Full 2.0");
         log("Mendeteksi root ...");
         detectRoot();
