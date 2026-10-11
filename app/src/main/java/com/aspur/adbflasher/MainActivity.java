@@ -139,6 +139,7 @@ public class MainActivity extends Activity {
         setContentView(root);
         showTab(1);
         Extra4.install(this);
+        Extra5.install(this);
         log("ADB Flasher Full 2.0");
         log("Mendeteksi root ...");
         detectRoot();
@@ -234,6 +235,7 @@ public class MainActivity extends Activity {
     }
 
     void confirm(String msg, Runnable r) {
+        if (Extra5.confirm(this, msg, r)) return;
         new AlertDialog.Builder(this).setTitle("Konfirmasi").setMessage(msg)
                 .setPositiveButton("Lanjut", (d, w) -> r.run())
                 .setNegativeButton("Batal", null).show();
@@ -746,5 +748,11 @@ public class MainActivity extends Activity {
                 if (!x.isEmpty()) log("cmdline+     : " + x);
             }
         });
+    }
+
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        setIntent(i);
+        Extra5.handleIntent(this, i);
     }
 }

@@ -35,14 +35,17 @@ class Extra2 {
                 }
             } else if (depth > 0 && --depth == 0 && wl != null && wl.isHeld()) {
                 wl.release();
+                Extra5.reset(m);
             }
         } catch (Exception e) { }
     }
 
     static void progress(MainActivity m, String s) {
+        Extra5.onLog(s);
         Matcher x = PROG.matcher(s);
         if (!x.matches()) return;
         int p = Integer.parseInt(x.group(2));
+        Extra5.prog(m, p);
         int f = Math.min(10, p / 10);
         StringBuilder b = new StringBuilder();
         for (int i = 0; i < 10; i++) b.append(i < f ? '#' : '-');
