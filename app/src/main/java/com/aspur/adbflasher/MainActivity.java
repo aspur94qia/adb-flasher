@@ -219,7 +219,7 @@ public class MainActivity extends Activity {
         ex.execute(() -> {
             Extra2.lock(this, true);
             try { r.run(); }
-            & finally { Extra2.lock(this, false); }
+            catch (Exception e) { log("Error: " + e.getMessage()); setStatus("error"); } finally { Extra2.lock(this, false); }
         });
     }
 
