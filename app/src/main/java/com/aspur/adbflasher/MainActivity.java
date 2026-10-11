@@ -2,11 +2,19 @@ package com.aspur.adbflasher;
 
 import android.app.*;
 import android.content.*;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.hardware.usb.*;
 import android.net.Uri;
 import android.os.*;
 import android.provider.OpenableColumns;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
 import java.io.*;
@@ -14,7 +22,9 @@ import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
     static final String ACT = "com.aspur.adbflasher.USB";
-    TextView out, info;
+    static final int BG = 0xFF0D1117, BAR = 0xFF161B22, LINE = 0xFF30363D, TXT = 0xFFC9D1D9, DIM = 0xFF8B949E;
+
+    TextView out, info, status;
     EditText part, cmd;
     LinearLayout rootBox, fbBox;
     ScrollView osv;
@@ -32,59 +42,144 @@ public class MainActivity extends Activity {
         }
     };
 
-    Button btn(String t, View.OnClickListener l) {
+    int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
+
+    GradientDrawable shape(int fill, int stroke, int radius) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(fill);
+        g.setCornerRadius(dp(radius));
+        if (stroke != 0) g.setStroke(dp(1), stroke);
+        return g;
+    }
+
+    TextView mono(String t, int size, int color) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextSize(size);
+        v.setTextColor(color);
+        v.setTypeface(Typeface.MONOSPACE);
+        return v;
+    }
+
+    View dot(int color) {
+        View v = new View(this);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(color);
+        v.setBackground(g);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(12), dp(12));
+        lp.setMargins(0, 0, dp(7), 0);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    EditText field(String hint) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setHintTextColor(DIM);
+        e.setTextColor(TXT);
+        e.setTypeface(Typeface.MONOSPACE);
+        e.setTextSize(13);
+        e.setSingleLine(true);
+        e.setBackground(shape(0xFF010409, LINE, 6));
+        e.setPadding(dp(10), dp(8), dp(10), dp(8));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(4), 0, dp(4));
+        e.setLayoutParams(lp);
+        return e;
+    }
+
+    Button btn(String t, int kind, View.OnClickListener l) {
+        int fill = 0xFF21262D, stroke = LINE, text = TXT;
+        if (kind == 1) { fill = 0xFF2D1215; stroke = 0xFFF85149; text = 0xFFFF7B72; }
+        else if (kind == 2) { fill = 0xFF0D2240; stroke = 0xFF58A6FF; text = 0xFF79C0FF; }
+        else if (kind == 3) { fill = 0xFF0F2A17; stroke = 0xFF3FB950; text = 0xFF56D364; }
         Button b = new Button(this);
         b.setText(t);
         b.setAllCaps(false);
+        b.setTextColor(text);
+        b.setTextSize(12);
+        b.setTypeface(Typeface.MONOSPACE);
+        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x44FFFFFF), shape(fill, stroke, 8), null));
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(8), dp(10), dp(8), dp(10));
+        b.setStateListAnimator(null);
         b.setOnClickListener(l);
         return b;
     }
 
+    void pair(LinearLayout p, Button a, Button b) {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams la = new LinearLayout.LayoutParams(0, -2, 1);
+        la.setMargins(0, dp(3), dp(3), dp(3));
+        LinearLayout.LayoutParams lb = new LinearLayout.LayoutParams(0, -2, 1);
+        lb.setMargins(dp(3), dp(3), 0, dp(3));
+        r.addView(a, la);
+        if (b != null) r.addView(b, lb); else r.addView(new View(this), lb);
+        p.addView(r, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    void setStatus(String s) { ui.post(() -> status.setText(" " + s)); }
+
     @Override protected void onCreate(Bundle s) {
         super.onCreate(s);
+        getWindow().setStatusBarColor(BAR);
+        getWindow().setNavigationBarColor(BAR);
         IntentFilter f = new IntentFilter(ACT);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(rc, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(rc, f);
 
-        int p = (int) (10 * getResources().getDisplayMetrics().density);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(p, p, p, p);
+        root.setBackgroundColor(BG);
 
-        part = new EditText(this);
-        part.setHint("nama partisi, mis. boot");
-        part.setSingleLine(true);
-        root.addView(part);
-        cmd = new EditText(this);
-        cmd.setHint("perintah");
-        cmd.setSingleLine(true);
-        root.addView(cmd);
-        info = new TextView(this);
-        info.setText("File: (belum dipilih)");
-        root.addView(info);
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(BAR);
+        bar.setPadding(dp(12), dp(10), dp(12), dp(10));
+        bar.addView(dot(0xFFFF5F56));
+        bar.addView(dot(0xFFFFBD2E));
+        bar.addView(dot(0xFF27C93F));
+        TextView title = mono("ADB Flasher - " + (BuildConfig.ROOT_MODE ? "root" : "non-root"), 13, TXT);
+        title.setGravity(Gravity.CENTER);
+        bar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView clear = mono("clear", 12, DIM);
+        clear.setOnClickListener(v -> out.setText(""));
+        bar.addView(clear);
+        root.addView(bar, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout cont = new LinearLayout(this);
+        cont.setOrientation(LinearLayout.VERTICAL);
+        cont.setPadding(dp(10), dp(8), dp(10), dp(8));
+
+        cont.addView(mono("PARTISI / PERINTAH", 10, DIM));
+        part = field("partisi, mis. boot");
+        cont.addView(part);
+        cmd = field("perintah");
+        cont.addView(cmd);
+        info = mono("file: (belum dipilih)", 11, DIM);
+        cont.addView(info);
 
         rootBox = new LinearLayout(this);
         rootBox.setOrientation(LinearLayout.VERTICAL);
-        rootBox.addView(btn("Cek root", v -> sh("id", true)));
-        rootBox.addView(btn("Daftar partisi", v -> sh("ls -l /dev/block/bootdevice/by-name/ | awk '{print $(NF-2), $NF}'", true)));
-        rootBox.addView(btn("Pilih file image", v -> pick()));
-        rootBox.addView(btn("Flash file ke partisi", v -> rootFlash()));
-        rootBox.addView(btn("Backup partisi", v -> rootBackup()));
-        rootBox.addView(btn("Reboot sistem", v -> sh("reboot", true)));
-        rootBox.addView(btn("Reboot recovery", v -> sh("reboot recovery", true)));
-        rootBox.addView(btn("Reboot bootloader", v -> sh("reboot bootloader", true)));
-        rootBox.addView(btn("Jalankan perintah (root)", v -> sh(cmd.getText().toString(), true)));
+        pair(rootBox, btn("Cek root", 2, v -> sh("id", true)),
+                btn("Daftar partisi", 0, v -> sh("ls -l /dev/block/bootdevice/by-name/ | awk '{print $(NF-2), $NF}'", true)));
+        pair(rootBox, btn("Pilih file image", 0, v -> pick()), btn("Backup partisi", 3, v -> rootBackup()));
+        pair(rootBox, btn("Flash ke partisi", 1, v -> rootFlash()),
+                btn("Jalankan perintah", 2, v -> sh(cmd.getText().toString(), true)));
+        pair(rootBox, btn("Reboot", 0, v -> sh("reboot", true)), btn("Recovery", 0, v -> sh("reboot recovery", true)));
+        pair(rootBox, btn("Bootloader", 0, v -> sh("reboot bootloader", true)), null);
 
         fbBox = new LinearLayout(this);
         fbBox.setOrientation(LinearLayout.VERTICAL);
-        fbBox.addView(btn("Cari perangkat fastboot (OTG)", v -> findUsb()));
-        fbBox.addView(btn("getvar all", v -> fbCmd("getvar:all")));
-        fbBox.addView(btn("Pilih file image", v -> pick()));
-        fbBox.addView(btn("Flash file ke partisi", v -> fbFlash()));
-        fbBox.addView(btn("Reboot", v -> fbCmd("reboot")));
-        fbBox.addView(btn("Reboot bootloader", v -> fbCmd("reboot-bootloader")));
-        fbBox.addView(btn("Kirim perintah fastboot", v -> fbCmd(cmd.getText().toString())));
-        fbBox.addView(btn("Perintah shell biasa (tanpa root)", v -> sh(cmd.getText().toString(), false)));
+        pair(fbBox, btn("Cari fastboot (OTG)", 2, v -> findUsb()), btn("getvar all", 0, v -> fbCmd("getvar:all")));
+        pair(fbBox, btn("Pilih file image", 0, v -> pick()), btn("Flash ke partisi", 1, v -> fbFlash()));
+        pair(fbBox, btn("Reboot", 0, v -> fbCmd("reboot")), btn("Reboot bootloader", 0, v -> fbCmd("reboot-bootloader")));
+        pair(fbBox, btn("Kirim fastboot", 2, v -> fbCmd(cmd.getText().toString())),
+                btn("Shell biasa", 0, v -> sh(cmd.getText().toString(), false)));
 
         ScrollView csv = new ScrollView(this);
         LinearLayout both = new LinearLayout(this);
@@ -92,18 +187,35 @@ public class MainActivity extends Activity {
         both.addView(rootBox);
         both.addView(fbBox);
         csv.addView(both);
-        root.addView(csv, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, 0, 1);
+        cl.setMargins(0, dp(6), 0, dp(6));
+        cont.addView(csv, cl);
 
-        out = new TextView(this);
-        out.setTypeface(android.graphics.Typeface.MONOSPACE);
-        out.setTextSize(11);
+        LinearLayout term = new LinearLayout(this);
+        term.setOrientation(LinearLayout.VERTICAL);
+        term.setBackground(shape(0xFF010409, LINE, 8));
+        term.setPadding(dp(8), dp(6), dp(8), dp(6));
+        term.addView(mono("TERMINAL", 10, DIM));
+        out = mono("", 11, 0xFF3FB950);
         out.setTextIsSelectable(true);
         osv = new ScrollView(this);
         osv.addView(out);
-        root.addView(osv, new LinearLayout.LayoutParams(-1, 0, 1));
+        term.addView(osv, new LinearLayout.LayoutParams(-1, 0, 1));
+        cont.addView(term, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        root.addView(cont, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        status = mono(" siap", 11, 0xFFFFFFFF);
+        status.setBackgroundColor(0xFF1F6FEB);
+        status.setPadding(dp(8), dp(5), dp(8), dp(5));
+        root.addView(status, new LinearLayout.LayoutParams(-1, -2));
+
         setContentView(root);
         rootBox.setVisibility(BuildConfig.ROOT_MODE ? View.VISIBLE : View.GONE);
         fbBox.setVisibility(BuildConfig.ROOT_MODE ? View.GONE : View.VISIBLE);
+        log("ADB Flasher 1.0 [" + (BuildConfig.ROOT_MODE ? "ROOT" : "NON-ROOT") + "]");
+        log(BuildConfig.ROOT_MODE ? "Tekan 'Cek root' untuk memulai." : "Sambungkan HP target (mode fastboot) lewat OTG.");
+        setStatus(BuildConfig.ROOT_MODE ? "mode root" : "mode non-root (OTG fastboot)");
     }
 
     @Override protected void onDestroy() {
@@ -113,7 +225,13 @@ public class MainActivity extends Activity {
 
     void log(String s) {
         ui.post(() -> {
-            out.append(s + "\n");
+            int col = 0xFF3FB950;
+            if (s.startsWith("$") || s.startsWith(">")) col = 0xFF79C0FF;
+            else if (s.startsWith("Error") || s.startsWith("Gagal") || s.startsWith("Izin")) col = 0xFFFF7B72;
+            else if (s.startsWith("[selesai")) col = 0xFF8B949E;
+            SpannableString sp = new SpannableString(s + "\n");
+            sp.setSpan(new ForegroundColorSpan(col), 0, sp.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            out.append(sp);
             osv.post(() -> osv.fullScroll(View.FOCUS_DOWN));
         });
     }
@@ -142,9 +260,11 @@ public class MainActivity extends Activity {
             while ((l = r.readLine()) != null) log(l);
             int code = pr.waitFor();
             log("[selesai, kode " + code + "]");
+            setStatus("siap (kode " + code + ")");
             return code;
         } catch (Exception e) {
             log("Error: " + e.getMessage());
+            setStatus("error");
             return -1;
         }
     }
@@ -152,6 +272,7 @@ public class MainActivity extends Activity {
     void sh(String command, boolean su) {
         if (command.trim().isEmpty()) return;
         log("$ " + command);
+        setStatus("menjalankan ...");
         ex.execute(() -> exec(command, su));
     }
 
@@ -173,7 +294,8 @@ public class MainActivity extends Activity {
                 pickedSize = c.getLong(c.getColumnIndexOrThrow(OpenableColumns.SIZE));
             }
         } catch (Exception e) { log("Gagal baca file: " + e.getMessage()); }
-        info.setText("File: " + name + " (" + pickedSize + " byte)");
+        info.setText("file: " + name + " (" + pickedSize + " byte)");
+        info.setTextColor(0xFF79C0FF);
     }
 
     void rootFlash() {
@@ -189,6 +311,7 @@ public class MainActivity extends Activity {
                 while ((n = is.read(b)) > 0) os.write(b, 0, n);
             } catch (Exception e) { log("Gagal salin: " + e.getMessage()); return; }
             log("Flash ke " + p + " ...");
+            setStatus("flash " + p + " ...");
             exec("dd if=" + f.getPath() + " of=/dev/block/bootdevice/by-name/" + p + " bs=4M && sync", true);
             f.delete();
         }));
@@ -199,6 +322,7 @@ public class MainActivity extends Activity {
         if (p == null) return;
         String dst = "/sdcard/Download/backup_" + p + ".img";
         log("Backup " + p + " ke " + dst);
+        setStatus("backup " + p + " ...");
         ex.execute(() -> exec("dd if=/dev/block/bootdevice/by-name/" + p + " of=" + dst + " bs=4M && sync", true));
     }
 
@@ -214,17 +338,19 @@ public class MainActivity extends Activity {
             }
         }
         log("Tidak ada perangkat fastboot. Masuk mode fastboot di HP target, sambung kabel OTG.");
+        setStatus("tidak ada perangkat fastboot");
     }
 
     void openFb(UsbDevice d) {
         try {
             fb = new Fastboot((UsbManager) getSystemService(USB_SERVICE), d);
             log("Terhubung ke fastboot.");
+            setStatus("OTG terhubung ke fastboot");
         } catch (IOException e) { log("Gagal: " + e.getMessage()); }
     }
 
     void fbCmd(String c) {
-        if (fb == null) { log("Belum terhubung. Tekan 'Cari perangkat fastboot'."); return; }
+        if (fb == null) { log("Belum terhubung. Tekan 'Cari fastboot (OTG)'."); return; }
         if (c.trim().isEmpty()) return;
         log("> " + c);
         ex.execute(() -> {
@@ -239,7 +365,9 @@ public class MainActivity extends Activity {
         if (fb == null || picked == null || pickedSize <= 0) { log("Hubungkan perangkat dan pilih file dulu."); return; }
         confirm("Flash file ke partisi '" + p + "' di HP target?", () -> ex.execute(() -> {
             try (InputStream is = getContentResolver().openInputStream(picked)) {
+                setStatus("flash " + p + " ke target ...");
                 fb.flash(is, pickedSize, p, this::log);
+                setStatus("flash selesai");
             } catch (Exception e) { log("Error: " + e.getMessage()); }
         }));
     }
