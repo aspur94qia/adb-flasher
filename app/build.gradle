@@ -6,24 +6,8 @@ android {
         applicationId 'com.aspur.adbflasher'
         minSdk 24
         targetSdk 33
-        versionCode 1
-        versionName '1.0'
-    }
-    buildFeatures { buildConfig true }
-    flavorDimensions 'mode'
-    productFlavors {
-        withroot {
-            dimension 'mode'
-            applicationIdSuffix '.root'
-            buildConfigField 'boolean', 'ROOT_MODE', 'true'
-            resValue 'string', 'app_name', 'ADB Flasher Root'
-        }
-        noroot {
-            dimension 'mode'
-            applicationIdSuffix '.nonroot'
-            buildConfigField 'boolean', 'ROOT_MODE', 'false'
-            resValue 'string', 'app_name', 'ADB Flasher Non-root'
-        }
+        versionCode 2
+        versionName '2.0'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

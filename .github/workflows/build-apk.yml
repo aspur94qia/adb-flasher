@@ -16,12 +16,11 @@ jobs:
         with:
           gradle-version: 8.5
       - name: Build
-        run: gradle assembleWithrootDebug assembleNorootDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
       - name: Rilis
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/withroot/debug/app-withroot-debug.apk adb-flasher-root.apk
-          cp app/build/outputs/apk/noroot/debug/app-noroot-debug.apk adb-flasher-nonroot.apk
-          ls -l *.apk
-          gh release create "apk-${{ github.run_number }}" adb-flasher-root.apk adb-flasher-nonroot.apk --title "ADB Flasher ${{ github.run_number }}" --notes "Dua versi: root dan non-root"
+          cp app/build/outputs/apk/debug/app-debug.apk adb-flasher-full.apk
+          ls -l adb-flasher-full.apk
+          gh release create "apk-${{ github.run_number }}" adb-flasher-full.apk --title "ADB Flasher Full ${{ github.run_number }}" --notes "Satu APK: root dan non-root"
