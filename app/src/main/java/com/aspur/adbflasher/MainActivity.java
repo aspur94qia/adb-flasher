@@ -163,6 +163,7 @@ public class MainActivity extends Activity {
         u.pair(t, u.btn("Jalankan perintah", 2, v -> sh(cmd.getText().toString(), true)), u.btn("Reboot", 0, v -> sh("reboot", true)));
         u.pair(t, u.btn("Recovery", 0, v -> sh("reboot recovery", true)), u.btn("Bootloader", 0, v -> sh("reboot bootloader", true)));
         u.pair(t, u.btn("EDL", 0, v -> sh("reboot edl", true)), null);
+        u.pair(t, u.btn("Backup semua penting", 3, v -> rootBackupAll()), null);
     }
 
     void buildFastboot(LinearLayout t) {
@@ -174,6 +175,7 @@ public class MainActivity extends Activity {
         u.pair(t, u.btn("Unlock bootloader", 1, v -> fbLock(true)), u.btn("Lock bootloader", 1, v -> fbLock(false)));
         u.pair(t, u.btn("Reboot", 0, v -> fbCmd("reboot")), u.btn("Reboot bootloader", 0, v -> fbCmd("reboot-bootloader")));
         u.pair(t, u.btn("Reboot recovery", 0, v -> fbCmd("reboot-recovery")), u.btn("Reboot fastbootd", 0, v -> fbCmd("reboot-fastboot")));
+        u.pair(t, u.btn("Matikan verity (vbmeta)", 1, v -> fbVerity()), u.btn("Flash zip (.img)", 1, v -> fbFlashZip()));
     }
 
     void buildAdb(LinearLayout t) {
@@ -184,12 +186,16 @@ public class MainActivity extends Activity {
         u.pair(t, u.btn("Sideload zip", 1, v -> adbSideload()), u.btn("tcpip 5555", 0, v -> adbTcpip()));
         u.pair(t, u.btn("Reboot", 0, v -> adbReboot("")), u.btn("Recovery", 0, v -> adbReboot("recovery")));
         u.pair(t, u.btn("Bootloader", 0, v -> adbReboot("bootloader")), u.btn("Putuskan", 0, v -> adbDisconnect()));
+        u.pair(t, u.btn("Logcat", 2, v -> adbLogcat()), u.btn("Screenshot", 3, v -> adbScreenshot()));
+        u.pair(t, u.btn("Daftar app", 2, v -> adbApps()), u.btn("Uninstall app", 1, v -> adbUninstall()));
+        u.pair(t, u.btn("Lihat folder (ls)", 2, v -> adbLs()), null);
     }
 
     void buildTools(LinearLayout t) {
         u.pair(t, u.btn("Pilih file", 0, v -> pick()), u.btn("Info file", 2, v -> fileInfo()));
         u.pair(t, u.btn("SHA-256", 3, v -> hash("SHA-256")), u.btn("MD5", 3, v -> hash("MD5")));
         u.pair(t, u.btn("Salin log", 0, v -> copyLog()), u.btn("Bersihkan log", 0, v -> out.setText("")));
+        u.pair(t, u.btn("Info boot.img", 2, v -> bootInfo()), null);
     }
 
     void log(String s) {
@@ -593,5 +599,148 @@ public class MainActivity extends Activity {
         ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         cm.setPrimaryClip(ClipData.newPlainText("log", out.getText()));
         Toast.makeText(this, "Log disalin", Toast.LENGTH_SHORT).show();
+    }
+
+    void rootBackupAll() {
+        if (!hasRoot) { log("Error: root tidak tersedia."); return; }
+        String d = "/sdcard/Download/backup_all";
+        String c = "mkdir -p " + d + "; for p in boot recovery vbmeta dtbo persist modem fsg modemst1 modemst2 misc; do if [ -e /dev/block/bootdevice/by-name/$p ]; then echo backup $p; dd if=/dev/block/bootdevice/by-name/$p of=" + d + "/$p.img bs=4M 2>&1 | tail -1; fi; done; sync; ls -l " + d;
+        log("$ backup semua partisi penting ke " + d);
+        setStatus("backup semua ...");
+        ex.execute(() -> exec(c, true));
+    }
+
+    void fbVerity() {
+        String p = part.getText().toString().trim();
+        if (p.isEmpty()) p = "vbmeta";
+        if (!p.matches("[A-Za-z0-9_]{1,32}")) { log("Error: nama partisi tidak valid."); return; }
+        if (needFb() || needPicked()) return;
+        final String pt = p;
+        final Uri uri = picked;
+        final long size = pickedSize;
+        confirm("Flash '" + pt + "' dengan verity dan verifikasi dimatikan?\nPakai file vbmeta dari ROM yang sama dengan HP target.", () -> bg(() -> {
+            if (size > 65536) throw new IOException("File terlalu besar untuk vbmeta (" + size + " byte)");
+            byte[] b = new byte[(int) size];
+            int off = 0;
+            try (InputStream is = openUri(uri)) {
+                while (off < b.length) {
+                    int n = is.read(b, off, b.length - off);
+                    if (n < 0) break;
+                    off += n;
+                }
+            }
+            if (off < 124 || b[0] != 'A' || b[1] != 'V' || b[2] != 'B' || b[3] != '0') throw new IOException("Bukan vbmeta (header AVB0 tidak ada)");
+            b[123] = 3;
+            setStatus("flash " + pt + " (verity off) ...");
+            fb.download(b.length, b, null, 0, 0, null, this::log);
+            log(fb.cmd("flash:" + pt, 60000, this::log));
+            setStatus("verity dimatikan");
+        }));
+    }
+
+    void fbFlashZip() {
+        if (needFb() || needPicked()) return;
+        final Uri uri = picked;
+        confirm("Flash SEMUA file .img di dalam zip ke partisi sesuai nama file, berurutan?\nPartisi yang salah bisa membuat HP target mati total.", () -> bg(() -> {
+            int count = 0;
+            try (java.util.zip.ZipInputStream zi = new java.util.zip.ZipInputStream(openUri(uri))) {
+                java.util.zip.ZipEntry e;
+                while ((e = zi.getNextEntry()) != null) {
+                    String nm = e.getName();
+                    nm = nm.substring(nm.lastIndexOf('/') + 1);
+                    if (e.isDirectory() || !nm.endsWith(".img")) continue;
+                    final String pt = nm.substring(0, nm.length() - 4);
+                    if (!pt.matches("[A-Za-z0-9_]{1,32}")) { log("Lewati " + nm); continue; }
+                    final File tmp = new File(getCacheDir(), "zip_part.img");
+                    try (OutputStream os = new FileOutputStream(tmp)) {
+                        byte[] b = new byte[65536];
+                        int r;
+                        while ((r = zi.read(b)) > 0) os.write(b, 0, r);
+                    }
+                    log("== " + pt + " (" + tmp.length() + " byte)");
+                    setStatus("flash " + pt + " ...");
+                    fb.flash(() -> new FileInputStream(tmp), tmp.length(), pt, this::log);
+                    tmp.delete();
+                    count++;
+                }
+            }
+            log("Selesai, " + count + " partisi di-flash.");
+            setStatus("flash zip selesai");
+        }));
+    }
+
+    void adbLogcat() {
+        if (needAdb()) return;
+        bg(() -> log(adb.run("shell:logcat -d -t 300").trim()));
+    }
+
+    void adbScreenshot() {
+        if (needAdb()) return;
+        bg(() -> {
+            adb.run("shell:screencap -p /data/local/tmp/_s.png");
+            File dst = new File(getExternalFilesDir(null), "screenshot_" + System.currentTimeMillis() + ".png");
+            long n;
+            try (OutputStream os = new FileOutputStream(dst)) { n = adb.pull("/data/local/tmp/_s.png", os, this::log); }
+            adb.run("shell:rm -f /data/local/tmp/_s.png");
+            log("Screenshot (" + n + " byte): " + dst.getPath());
+        });
+    }
+
+    void adbApps() {
+        if (needAdb()) return;
+        bg(() -> log(adb.run("shell:pm list packages -3").trim()));
+    }
+
+    void adbUninstall() {
+        String pk = cmd.getText().toString().trim();
+        if (needAdb()) return;
+        if (!pk.matches("[A-Za-z0-9_.]{3,200}")) { log("Error: isi nama paket di kolom perintah, mis. com.contoh.app"); return; }
+        confirm("Uninstall '" + pk + "' dari HP target?", () -> bg(() -> log(adb.run("shell:pm uninstall --user 0 " + pk).trim())));
+    }
+
+    void adbLs() {
+        if (needAdb()) return;
+        String path = cmd.getText().toString().trim();
+        if (path.isEmpty()) path = "/sdcard";
+        final String pth = path;
+        bg(() -> log(adb.run("shell:ls -la " + pth).trim()));
+    }
+
+    static String cstr(byte[] b, int o, int len) {
+        int e = o;
+        while (e < o + len && b[e] != 0) e++;
+        return new String(b, o, e - o);
+    }
+
+    void bootInfo() {
+        if (picked == null) { log("Error: pilih file dulu."); return; }
+        final Uri uri = picked;
+        bg(() -> {
+            byte[] h = new byte[1632];
+            int off = 0;
+            try (InputStream is = openUri(uri)) {
+                while (off < h.length) {
+                    int n = is.read(h, off, h.length - off);
+                    if (n < 0) break;
+                    off += n;
+                }
+            }
+            if (off < 640 || !new String(h, 0, 8).equals("ANDROID!")) { log("Error: bukan boot.img Android (header ANDROID! tidak ada)."); return; }
+            java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(h).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            log("kernel size  : " + (b.getInt(8) & 0xffffffffL) + " byte");
+            log("kernel addr  : 0x" + Long.toHexString(b.getInt(12) & 0xffffffffL));
+            log("ramdisk size : " + (b.getInt(16) & 0xffffffffL) + " byte");
+            log("ramdisk addr : 0x" + Long.toHexString(b.getInt(20) & 0xffffffffL));
+            log("second size  : " + (b.getInt(24) & 0xffffffffL) + " byte");
+            log("tags addr    : 0x" + Long.toHexString(b.getInt(32) & 0xffffffffL));
+            log("page size    : " + b.getInt(36));
+            log("header ver   : " + b.getInt(40));
+            log("name         : " + cstr(h, 48, 16));
+            log("cmdline      : " + cstr(h, 64, 512));
+            if (off >= 1632) {
+                String x = cstr(h, 608, 1024);
+                if (!x.isEmpty()) log("cmdline+     : " + x);
+            }
+        });
     }
 }
