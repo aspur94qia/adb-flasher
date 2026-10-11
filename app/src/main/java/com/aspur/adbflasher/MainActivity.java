@@ -138,6 +138,7 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         showTab(1);
+        Extra4.install(this);
         log("ADB Flasher Full 2.0");
         log("Mendeteksi root ...");
         detectRoot();
