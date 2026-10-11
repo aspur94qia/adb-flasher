@@ -136,7 +136,7 @@ public class MainActivity extends Activity {
     int exec(String command, boolean su) {
         try {
             String[] a = su ? new String[]{"su", "-c", command} : new String[]{"sh", "-c", command};
-            Process pr = new ProcessBuilder(a).redirectErrorStream(true).start();
+            java.lang.Process pr = new ProcessBuilder(a).redirectErrorStream(true).start();
             BufferedReader r = new BufferedReader(new InputStreamReader(pr.getInputStream()));
             String l;
             while ((l = r.readLine()) != null) log(l);
