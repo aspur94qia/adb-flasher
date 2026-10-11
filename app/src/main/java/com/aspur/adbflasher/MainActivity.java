@@ -26,8 +26,8 @@ public class MainActivity extends Activity {
     TextView out, info, status;
     EditText part, cmd;
     ScrollView osv;
-    LinearLayout[] tabs = new LinearLayout[4];
-    Button[] tabBtns = new Button[4];
+    LinearLayout[] tabs = new LinearLayout[5];
+    Button[] tabBtns = new Button[5];
     Uri picked;
     long pickedSize;
     String pickedName = "";
@@ -79,8 +79,8 @@ public class MainActivity extends Activity {
         LinearLayout tb = new LinearLayout(this);
         tb.setOrientation(LinearLayout.HORIZONTAL);
         tb.setPadding(u.dp(6), u.dp(6), u.dp(6), 0);
-        String[] names = {"ROOT", "FASTBOOT", "ADB", "TOOLS"};
-        for (int i = 0; i < 4; i++) {
+        String[] names = {"ROOT", "FASTBOOT", "ADB", "TOOLS", "EXTRA"};
+        for (int i = 0; i < 5; i++) {
             final int idx = i;
             tabBtns[i] = u.btn(names[i], 2, v -> showTab(idx));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         info = u.mono("file: (belum dipilih)", 11, Ui.DIM);
         cont.addView(info);
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 5; i++) {
             tabs[i] = new LinearLayout(this);
             tabs[i].setOrientation(LinearLayout.VERTICAL);
         }
@@ -107,11 +107,12 @@ public class MainActivity extends Activity {
         buildFastboot(tabs[1]);
         buildAdb(tabs[2]);
         buildTools(tabs[3]);
+        Extra.build(this, tabs[4]);
 
         ScrollView csv = new ScrollView(this);
         LinearLayout both = new LinearLayout(this);
         both.setOrientation(LinearLayout.VERTICAL);
-        for (int i = 0; i < 4; i++) both.addView(tabs[i]);
+        for (int i = 0; i < 5; i++) both.addView(tabs[i]);
         csv.addView(both);
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, 0, 1);
         cl.setMargins(0, u.dp(4), 0, u.dp(6));
@@ -149,7 +150,7 @@ public class MainActivity extends Activity {
     }
 
     void showTab(int i) {
-        for (int j = 0; j < 4; j++) {
+        for (int j = 0; j < 5; j++) {
             tabs[j].setVisibility(j == i ? View.VISIBLE : View.GONE);
             tabBtns[j].setAlpha(j == i ? 1f : 0.45f);
         }
